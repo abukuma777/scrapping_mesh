@@ -2,4 +2,4 @@
 *.log
 *.html
 test.py
-scrapping.py
+scraping.py
