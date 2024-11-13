@@ -139,6 +139,102 @@ def download_wait(file_name):
     return True
 
 
+import os
+import re
+import shutil
+
+
+def move_all_files():
+    """ダウンロード完了後、ファイルを適切なフォルダに移動"""
+    # 都道府県名のマッピング
+    prefecture_map = {
+        "01": "北海道",
+        "02": "青森",
+        "03": "岩手",
+        "04": "宮城",
+        "05": "秋田",
+        "06": "山形",
+        "07": "福島",
+        "08": "茨城",
+        "09": "栃木",
+        "10": "群馬",
+        "11": "埼玉",
+        "12": "千葉",
+        "13": "東京",
+        "14": "神奈川",
+        "15": "新潟",
+        "16": "富山",
+        "17": "石川",
+        "18": "福井",
+        "19": "山梨",
+        "20": "長野",
+        "21": "岐阜",
+        "22": "静岡",
+        "23": "愛知",
+        "24": "三重",
+        "25": "滋賀",
+        "26": "京都",
+        "27": "大阪",
+        "28": "兵庫",
+        "29": "奈良",
+        "30": "和歌山",
+        "31": "鳥取",
+        "32": "島根",
+        "33": "岡山",
+        "34": "広島",
+        "35": "山口",
+        "36": "徳島",
+        "37": "香川",
+        "38": "愛媛",
+        "39": "高知",
+        "40": "福岡",
+        "41": "佐賀",
+        "42": "長崎",
+        "43": "熊本",
+        "44": "大分",
+        "45": "宮崎",
+        "46": "鹿児島",
+        "47": "沖縄",
+    }
+
+    # 正規表現でファイル名から年と都道府県番号を抽出
+    pattern = re.compile(r"500m_mesh_suikei_(\d{4})_shape_(\d{2})\.zip")
+
+    for file_name in os.listdir(data_dir):
+        if file_name.endswith(".zip"):
+            try:
+                # 正規表現で年と都道府県番号を抽出
+                match = pattern.match(file_name)
+                if not match:
+                    print(f"Unexpected file format: {file_name}")
+                    continue
+
+                year = match.group(1)  # 例: '2018'
+                prefecture_number = match.group(2)  # 例: '01'
+
+                # 都道府県名を取得
+                prefecture_name = prefecture_map.get(prefecture_number, "不明")
+
+                # 正しい保存先フォルダを構築
+                dest_folder = os.path.join(
+                    data_dir, f"paquet_500mメッシュ人口推計/{year}/{prefecture_number}_{prefecture_name}"
+                )
+
+                # ディレクトリが存在しない場合は作成
+                os.makedirs(dest_folder, exist_ok=True)
+
+                # ファイルの移動
+                src_path = os.path.join(data_dir, file_name)
+                dest_path = os.path.join(dest_folder, file_name)
+
+                # 移動処理
+                shutil.move(src_path, dest_path)
+                print(f"Moved file to: {dest_path}")
+
+            except Exception as e:
+                print(f"Failed to move file {file_name}: {e}")
+
+
 if __name__ == "__main__":
     driver = None  # 初期化しておく
     try:
@@ -156,6 +252,8 @@ if __name__ == "__main__":
 
         # 全都道府県のデータをダウンロード
         download_all_files(driver)
+        # ダウンロード後にファイルを一括移動
+        move_all_files()
 
     except Exception as e:
         print(f"An error occurred: {e}")
