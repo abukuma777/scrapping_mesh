@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import sys
 import time
@@ -19,19 +20,17 @@ sys.stderr = open(log_file, "w", encoding="utf-8")
 
 
 def setup_data_directory():
-    """data フォルダを削除して再作成"""
-    data_dir = os.path.join(os.getcwd(), "data")
+    """./data/paquet_500mメッシュ人口推計 フォルダを削除して再作成"""
+    base_dir = os.path.join(os.getcwd(), "data", "paquet_500mメッシュ人口推計")
 
-    # 既にフォルダが存在する場合は削除
-    if os.path.exists(data_dir):
-        print("Existing 'data' folder found. Deleting...")
-        shutil.rmtree(data_dir)
+    # 既にフォルダが存在する場合は削除して再作成
+    if os.path.exists(base_dir):
+        print("Existing './data/paquet_500mメッシュ人口推計' folder found. Deleting...")
+        shutil.rmtree(base_dir)
 
-    # 新しくフォルダを作成
-    os.makedirs(data_dir, exist_ok=True)
-    print("Created new 'data' folder.")
-
-    return data_dir
+    os.makedirs(base_dir, exist_ok=True)
+    print("Created new './data/paquet_500mメッシュ人口推計' folder.")
+    return base_dir
 
 
 def setup_chrome_options(download_dir):
@@ -113,25 +112,34 @@ def download_all_files(driver):
 
 def download_wait(file_name):
     """ダウンロードが完了するまで待機し、ファイルの存在を確認"""
+    global data_dir  # グローバル変数 data_dir を明示的に参照
     download_complete = False
-    retries = 10
+    retries = 20  # 最大リトライ回数を増やす
+    download_folder = data_dir
+
+    file_path = os.path.join(download_folder, file_name)
+    prev_size = -1
 
     for attempt in range(retries):
         # ダウンロード中のファイル（.crdownload）が存在するかチェック
-        in_progress_files = [f for f in os.listdir(data_dir) if f.endswith(".crdownload")]
+        in_progress_files = [f for f in os.listdir(download_folder) if f.endswith(".crdownload")]
         if in_progress_files:
             print(f"Attempt {attempt + 1}: Waiting for download to complete... {in_progress_files}")
             time.sleep(2)
         else:
-            # ファイルが正しくダウンロードされたか確認
-            file_path = os.path.join(data_dir, file_name)
-            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                print(f"Download completed: {file_name}")
-                download_complete = True
-                break
+            # ダウンロードが完了したか確認
+            if os.path.exists(file_path):
+                current_size = os.path.getsize(file_path)
+                # サイズが変わらない場合、ダウンロード完了と判断
+                if current_size > 0 and current_size == prev_size:
+                    print(f"Download completed: {file_name}")
+                    download_complete = True
+                    break
+                prev_size = current_size
+                print(f"Checking file size: {current_size} bytes")
             else:
                 print(f"No completed file found yet for {file_name}. Retrying...")
-                time.sleep(2)
+            time.sleep(1)
 
     if not download_complete:
         print(f"Download did not complete for {file_name}. Retrying manually...")
@@ -139,14 +147,8 @@ def download_wait(file_name):
     return True
 
 
-import os
-import re
-import shutil
-
-
-def move_all_files():
+def move_all_files(base_dir):
     """ダウンロード完了後、ファイルを適切なフォルダに移動"""
-    # 都道府県名のマッピング
     prefecture_map = {
         "01": "北海道",
         "02": "青森",
@@ -200,7 +202,7 @@ def move_all_files():
     # 正規表現でファイル名から年と都道府県番号を抽出
     pattern = re.compile(r"500m_mesh_suikei_(\d{4})_shape_(\d{2})\.zip")
 
-    for file_name in os.listdir(data_dir):
+    for file_name in os.listdir(base_dir):
         if file_name.endswith(".zip"):
             try:
                 # 正規表現で年と都道府県番号を抽出
@@ -215,16 +217,14 @@ def move_all_files():
                 # 都道府県名を取得
                 prefecture_name = prefecture_map.get(prefecture_number, "不明")
 
-                # 正しい保存先フォルダを構築
-                dest_folder = os.path.join(
-                    data_dir, f"paquet_500mメッシュ人口推計/{year}/{prefecture_number}_{prefecture_name}"
-                )
+                # 保存先フォルダを構築
+                dest_folder = os.path.join(base_dir, f"{year}/{prefecture_number}_{prefecture_name}")
 
                 # ディレクトリが存在しない場合は作成
                 os.makedirs(dest_folder, exist_ok=True)
 
                 # ファイルの移動
-                src_path = os.path.join(data_dir, file_name)
+                src_path = os.path.join(base_dir, file_name)
                 dest_path = os.path.join(dest_folder, file_name)
 
                 # 移動処理
@@ -236,10 +236,9 @@ def move_all_files():
 
 
 if __name__ == "__main__":
-    driver = None  # 初期化しておく
     try:
         # データ保存ディレクトリのセットアップ
-        data_dir = setup_data_directory()
+        data_dir = setup_data_directory()  # ここで data_dir として統一
 
         print("Starting download process...")
         driver = webdriver.Chrome(
@@ -252,13 +251,13 @@ if __name__ == "__main__":
 
         # 全都道府県のデータをダウンロード
         download_all_files(driver)
-        # ダウンロード後にファイルを一括移動
-        move_all_files()
+
+        # ダウンロードしたファイルを適切なフォルダに移動
+        move_all_files(data_dir)
 
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
-        # driver が定義されていれば quit() を呼び出す
         if driver:
             driver.quit()
             print("Driver closed.")
